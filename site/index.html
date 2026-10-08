@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dylan's Site | trifffling.com</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">IS 373 &middot; Self-hosted on DigitalOcean</p>
+    <h1>Welcome to Dylan&rsquo;s Site</h1>
+    <p id="env" class="badge">Environment: loading&hellip;</p>
+    <p id="release-note">Release note: first automated deployment.</p>
+    <section>
+      <h2>How this page gets here</h2>
+      <ol>
+        <li>A push to the <code>qa</code> branch runs GitHub Actions: validate the site, build a Docker image, and smoke-test it.</li>
+        <li>The tested image is pushed to Docker Hub as <code>:qa</code>, and the server deploys it to QA automatically.</li>
+        <li>Merging <code>qa</code> into <code>main</code> publishes <code>:prod</code>, and production updates the same way.</li>
+      </ol>
+    </section>
+    <footer>Running commit: <code id="commit">loading&hellip;</code></footer>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

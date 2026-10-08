@@ -1,0 +1,10 @@
+body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #101827; color: #f4f7fc; font: 18px/1.6 system-ui, sans-serif; }
+main { max-width: 760px; padding: 40px 24px; }
+h1 { font-size: clamp(32px, 6vw, 56px); margin: 0 0 16px; }
+h2 { font-size: 22px; margin-top: 32px; }
+.eyebrow { color: #64dfb4; margin: 0; }
+.badge { display: inline-block; padding: 4px 12px; border-radius: 999px; font-weight: 600; background: #1f7a52; }
+body[data-env="qa"] .badge { background: #b45309; }
+#release-note { color: #bac7da; }
+code { background: #1e293b; padding: 1px 6px; border-radius: 4px; }
+footer { margin-top: 32px; color: #94a3b8; font-size: 15px; }

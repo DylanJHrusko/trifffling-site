@@ -1,0 +1,76 @@
+# Runs on the droplet beside the existing Traefik proxy (network hosting-web).
+# WUD polls Docker Hub every minute and recreates a container when its tag's
+# digest changes: :qa -> QA, :prod -> production. GitHub never logs in to the server.
+name: trifffling-site
+
+x-site: &site
+  user: "101:101"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 64
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+  networks: [hosting]
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: {max-size: 10m, max-file: "3"}
+
+services:
+  production:
+    <<: *site
+    image: dylanhrusko/trifffling-site:prod
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: hosting-web
+      traefik.http.routers.site-production.rule: "Host(`trifffling.com`) || Host(`www.trifffling.com`)"
+      traefik.http.routers.site-production.entrypoints: websecure
+      traefik.http.routers.site-production.service: site-production
+      traefik.http.services.site-production.loadbalancer.server.port: "8080"
+      wud.watch: "true"
+      wud.watch.digest: "true"
+      wud.tag.include: "^prod$$"
+      wud.trigger.include: docker.autodeploy
+
+  qa:
+    <<: *site
+    image: dylanhrusko/trifffling-site:qa
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: hosting-web
+      traefik.http.routers.site-qa.rule: "Host(`qa.trifffling.com`)"
+      traefik.http.routers.site-qa.entrypoints: websecure
+      traefik.http.routers.site-qa.service: site-qa
+      traefik.http.services.site-qa.loadbalancer.server.port: "8080"
+      wud.watch: "true"
+      wud.watch.digest: "true"
+      wud.tag.include: "^qa$$"
+      wud.trigger.include: docker.autodeploy
+
+  wud:
+    image: getwud/wud:9.0.2@sha256:257b2221f201a0231db295b662882c5873ff72dc687be94dbae2e15f5394f151
+    # No published ports and not on the proxy network: the updater UI is unreachable from outside.
+    env_file:
+      - path: ./wud.env
+        required: false
+    environment:
+      WUD_WATCHER_LOCAL_WATCHBYDEFAULT: "false"
+      WUD_WATCHER_LOCAL_CRON: "* * * * *"
+      WUD_TRIGGER_DOCKER_AUTODEPLOY_AUTO: "true"
+      WUD_TRIGGER_DOCKER_AUTODEPLOY_PRUNE: "true"
+      WUD_TRIGGER_DOCKER_AUTODEPLOY_DRYRUN: "false"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - wud-data:/store
+    labels:
+      wud.watch: "false"
+    restart: unless-stopped
+
+networks:
+  hosting:
+    external: true
+    name: hosting-web
+
+volumes:
+  wud-data:

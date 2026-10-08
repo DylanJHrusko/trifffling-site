@@ -1,0 +1,97 @@
+name: CI/CD
+
+# Promotion rule: push to `qa` -> deploy QA (qa.trifffling.com).
+# Merge `qa` into `main` -> deploy production (trifffling.com).
+# Pull requests into main only run the checks; they never publish or deploy.
+on:
+  push:
+    branches: [qa, main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cicd-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: dylanhrusko/trifffling-site
+
+jobs:
+  pipeline:
+    name: validate, build, push, deploy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the exact commit
+        uses: actions/checkout@v4
+
+      - name: Choose the target environment
+        id: target
+        run: |
+          if [ "$GITHUB_REF_NAME" = main ]; then
+            echo "tag=prod" >> "$GITHUB_OUTPUT"; echo "url=https://trifffling.com" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=qa" >> "$GITHUB_OUTPUT"; echo "url=https://qa.trifffling.com" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate the site (test 1)
+        run: python3 tests/test_site.py
+
+      - name: Build the Docker image
+        run: |
+          docker build \
+            --build-arg COMMIT_SHA="$GITHUB_SHA" \
+            --build-arg BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --tag "$IMAGE:sha-$GITHUB_SHA" .
+
+      - name: Smoke-test the built container (test 2)
+        run: |
+          docker run -d --name smoke -p 127.0.0.1:8080:8080 \
+            --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+            --tmpfs /tmp:rw,noexec,nosuid,nodev,size=16m "$IMAGE:sha-$GITHUB_SHA"
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:8080/ >/dev/null && break; sleep 1; done
+          curl -fsS http://127.0.0.1:8080/ | grep -q "Dylan"
+          curl -fsS http://127.0.0.1:8080/version.json | grep -q "$GITHUB_SHA"
+          ! curl -fsSI http://127.0.0.1:8080/ | grep -iE '^server: nginx/[0-9]'
+          test "$(docker exec smoke id -u)" != 0
+          echo "Container serves the page, reports commit $GITHUB_SHA, hides its version, and is not root."
+          docker rm -f smoke
+
+      - name: Log in to Docker Hub (secret from GitHub Actions)
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          username: dylanhrusko
+          password: ${{ secrets.DOCKER_API_KEY }}
+
+      - name: Push the tested image to Docker Hub
+        if: github.event_name == 'push'
+        run: |
+          docker tag "$IMAGE:sha-$GITHUB_SHA" "$IMAGE:${{ steps.target.outputs.tag }}"
+          docker push "$IMAGE:sha-$GITHUB_SHA"
+          docker push "$IMAGE:${{ steps.target.outputs.tag }}"
+
+      - name: Wait for the server to deploy this commit automatically
+        if: github.event_name == 'push'
+        env:
+          URL: ${{ steps.target.outputs.url }}
+        run: |
+          for i in $(seq 1 40); do
+            live=$(curl -fsS "$URL/version.json" 2>/dev/null || true)
+            if echo "$live" | grep -q "$GITHUB_SHA"; then
+              echo "Deployed: $URL is serving commit $GITHUB_SHA"
+              {
+                echo "## Deployed to ${{ steps.target.outputs.tag == 'prod' && 'production' || 'QA' }}"
+                echo "- URL: $URL"
+                echo "- Commit: \`$GITHUB_SHA\`"
+                echo "- Image: \`$IMAGE:sha-$GITHUB_SHA\` (also tagged \`:${{ steps.target.outputs.tag }}\`)"
+                echo "- Registry: https://hub.docker.com/r/dylanhrusko/trifffling-site/tags"
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "Waiting for the server to pick up the new image ($i/40)..."; sleep 15
+          done
+          echo "The server did not report commit $GITHUB_SHA within 10 minutes"; exit 1
