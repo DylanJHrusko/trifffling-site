@@ -41,4 +41,59 @@ Image registry: https://hub.docker.com/r/dylanhrusko/trifffling-site/tags
 
 ## Test Evidence
 
-_Filled in after the QA → production demonstration._
+### QA → production demonstration (October 8, 2026)
+
+The visible change: the page's release note went from "first automated deployment." to "promoted from QA to production through GitHub Actions."
+
+| Step | Workflow run | Commit / image tag | Result |
+|---|---|---|---|
+| 1. Push to `qa` | [Run 37820388974](https://github.com/DylanJHrusko/trifffling-site/actions/runs/37820388974) | `5345068` → `dylanhrusko/trifffling-site:qa` | QA updated, production unchanged |
+| 2. PR `qa` → `main` | [PR #1](https://github.com/DylanJHrusko/trifffling-site/pull/1) | checks only, no deploy | Merged |
+| 3. Push to `main` (merge) | [Run 37821147839](https://github.com/DylanJHrusko/trifffling-site/actions/runs/37821147839) | `44bcae1` → `dylanhrusko/trifffling-site:prod` | Production updated |
+
+Each run validated the site, built the image, smoke-tested the container, pushed to Docker Hub, and then waited until the public URL reported the new commit (see each run's summary). First deployments: [QA run 37819520163](https://github.com/DylanJHrusko/trifffling-site/actions/runs/37819520163), [production run 37819518189](https://github.com/DylanJHrusko/trifffling-site/actions/runs/37819518189).
+
+**Image registry:** https://hub.docker.com/r/dylanhrusko/trifffling-site/tags (tags `qa`, `prod`, and `sha-<commit>` for every release).
+
+**Deployed now:** production `44bcae155a385302bfc6e40473636368f095ed5a`, QA `5345068d837e2cc75611bb39340ac01ada18d8d0` — each site shows its running commit at the bottom of the page and at `/version.json`.
+
+#### Screenshots
+
+1. QA after the push to `qa` (new release note, QA badge):
+   ![QA with the new release note](docs/evidence/1-qa-new.png)
+2. Production at the same time, still on the old release note:
+   ![Production before promotion](docs/evidence/2-prod-before.png)
+3. Production after merging `qa` into `main`:
+   ![Production after promotion](docs/evidence/3-prod-after.png)
+
+### SSH security
+
+Run from my laptop after hardening (`/etc/ssh/sshd_config.d/01-hardening.conf`, loaded before the cloud-init defaults). Key login as the non-root user works; root and password login are rejected. No keys, passwords, or tokens are shown.
+
+```text
+$ ssh dylanh@157.230.95.176   # key login as the new non-root user
+logged in as: dylanh (uid 1000) on selfHost373
+
+$ ssh root@157.230.95.176   # direct root login
+root@157.230.95.176: Permission denied (publickey).
+
+$ ssh -o PubkeyAuthentication=no -o PreferredAuthentications=password dylanh@157.230.95.176   # password login
+dylanh@157.230.95.176: Permission denied (publickey).
+
+$ sudo sshd -T | grep -E "permitrootlogin|passwordauthentication|kbdinteractive|pubkeyauthentication|authenticationmethods|allowusers"
+permitrootlogin no
+pubkeyauthentication yes
+passwordauthentication no
+kbdinteractiveauthentication no
+allowusers dylanh
+authenticationmethods publickey
+```
+
+Raw output: [docs/evidence/ssh-evidence.txt](docs/evidence/ssh-evidence.txt)
+
+### Server hardening summary
+
+- DigitalOcean Cloud Firewall and UFW allow inbound TCP 22, 80, and 443 only; SSH is rate-limited.
+- SSH: key-only login as the non-root user `dylanh`; root login and password login disabled.
+- Containers run as a non-root user with a read-only filesystem, no Linux capabilities, and `no-new-privileges`; only Traefik publishes ports.
+- No server credentials exist in GitHub: the server pulls released images itself.
