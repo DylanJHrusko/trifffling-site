@@ -64,7 +64,7 @@ Each run validated the site, built the image, smoke-tested the container, pushed
 2. Production at the same time, still on the old release note:
    ![Production before promotion](docs/evidence/2-prod-before.png)
 3. Production after merging `qa` into `main`:
-   ![Production after promotion](docs/evidence/3-prod-after.png)
+   ![Production after promotion](docs/evidence/3-prod-after.webp)
 
 ### SSH security
 
