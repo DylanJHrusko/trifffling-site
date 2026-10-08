@@ -55,7 +55,7 @@ Each run validated the site, built the image, smoke-tested the container, pushed
 
 **Image registry:** https://hub.docker.com/r/dylanhrusko/trifffling-site/tags (tags `qa`, `prod`, and `sha-<commit>` for every release).
 
-**Deployed now:** production `44bcae155a385302bfc6e40473636368f095ed5a`, QA `5345068d837e2cc75611bb39340ac01ada18d8d0` — each site shows its running commit at the bottom of the page and at `/version.json`.
+**Deployed commits:** the promoted demo release was QA `5345068d837e2cc75611bb39340ac01ada18d8d0` → production `44bcae155a385302bfc6e40473636368f095ed5a`. Later documentation-only commits (this README and screenshots) took the same `qa` → pull request → `main` path, and every run passed ([all runs](https://github.com/DylanJHrusko/trifffling-site/actions)). Each site always shows its running commit at the bottom of the page and at `/version.json` — at submission: production `7b0d887`, QA `d775275` (or later if further changes are promoted).
 
 #### Screenshots
 
@@ -67,6 +67,8 @@ Each run validated the site, built the image, smoke-tested the container, pushed
    ![Production after promotion](docs/evidence/3-prod-after.webp)
 
 ### SSH security
+
+I created the non-root sudo user `dylanh`, copied my SSH public key to it, and verified key login and `sudo` worked **before** disabling the old login methods. The hardening was applied with a 5-minute automatic rollback armed; the rollback was cancelled only after a fresh key login as `dylanh` succeeded. All administration and deployment now use `dylanh` (with `sudo` when needed).
 
 Run from my laptop after hardening (`/etc/ssh/sshd_config.d/01-hardening.conf`, loaded before the cloud-init defaults). Key login as the non-root user works; root and password login are rejected. No keys, passwords, or tokens are shown.
 
@@ -91,9 +93,14 @@ authenticationmethods publickey
 
 Raw output: [docs/evidence/ssh-evidence.txt](docs/evidence/ssh-evidence.txt)
 
+### How the change reached QA and production
+
+**What triggers CI:** a push to `qa` or `main`, or a pull request into `main` (checks only). **What it checks:** `tests/test_site.py` validates the page and configuration, then the built container is smoke-tested (serves the page, reports the exact commit, hides the nginx version, runs as non-root); any failure stops the job before anything is pushed. **How the image is built:** `docker build` copies the site into the unprivileged nginx image and stamps the commit into `/version.json`. **How it reaches QA and production:** the tested image is pushed to Docker Hub as `:qa` (from `qa`) or `:prod` (from `main`); WUD on the Droplet detects the new image within about a minute and recreates only that environment's container; the workflow then waits until the public URL reports the new commit.
+
 ### Server hardening summary
 
 - DigitalOcean Cloud Firewall and UFW allow inbound TCP 22, 80, and 443 only; SSH is rate-limited.
 - SSH: key-only login as the non-root user `dylanh`; root login and password login disabled.
 - Containers run as a non-root user with a read-only filesystem, no Linux capabilities, and `no-new-privileges`; only Traefik publishes ports.
 - No server credentials exist in GitHub: the server pulls released images itself.
+- HTTPS: Traefik v3 reverse proxy on the Droplet routes `trifffling.com`/`www` to production and `qa.trifffling.com` to QA, with automatic Let's Encrypt certificates and HTTP→HTTPS redirects (proxy set up from the course's [373_hosting](https://github.com/kaw393939/373_hosting) lab; only Traefik publishes ports 80/443).
