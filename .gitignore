@@ -2,3 +2,4 @@
 *.pem
 *.key
 __pycache__/
+deploy/wud.env

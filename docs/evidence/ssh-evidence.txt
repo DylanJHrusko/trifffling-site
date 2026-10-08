@@ -1,0 +1,16 @@
+$ ssh dylanh@157.230.95.176   # key login as the new non-root user
+logged in as: dylanh (uid 1000) on selfHost373
+
+$ ssh root@157.230.95.176   # direct root login
+root@157.230.95.176: Permission denied (publickey).
+
+$ ssh -o PubkeyAuthentication=no -o PreferredAuthentications=password dylanh@157.230.95.176   # password login
+dylanh@157.230.95.176: Permission denied (publickey).
+
+$ sudo sshd -T | grep -E "permitrootlogin|passwordauthentication|kbdinteractive|pubkeyauthentication|authenticationmethods|allowusers"
+permitrootlogin no
+pubkeyauthentication yes
+passwordauthentication no
+kbdinteractiveauthentication no
+allowusers dylanh
+authenticationmethods publickey
