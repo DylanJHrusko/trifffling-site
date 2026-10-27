@@ -103,4 +103,4 @@ Raw output: [docs/evidence/ssh-evidence.txt](docs/evidence/ssh-evidence.txt)
 - SSH: key-only login as the non-root user `dylanh`; root login and password login disabled.
 - Containers run as a non-root user with a read-only filesystem, no Linux capabilities, and `no-new-privileges`; only Traefik publishes ports.
 - No server credentials exist in GitHub: the server pulls released images itself.
-- HTTPS: Traefik v3 reverse proxy on the Droplet routes `trifffling.com`/`www` to production and `qa.trifffling.com` to QA, with automatic Let's Encrypt certificates and HTTP→HTTPS redirects (proxy set up from the course's [373_hosting](https://github.com/kaw393939/373_hosting) lab; only Traefik publishes ports 80/443).
+- HTTPS: Traefik v3 reverse proxy on the Droplet routes `trifffling.com`/`www` to production and `qa.trifffling.com` to QA, with automatic Let's Encrypt certificates and HTTP→HTTPS redirects ; only Traefik publishes ports 80/443).
